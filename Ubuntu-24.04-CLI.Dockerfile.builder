@@ -60,6 +60,7 @@ RUN apt-get update && \
     sudo \
     openssh-server \
     net-tools \
+    iptables \
     iputils-ping \
     iproute2 \
     dnsutils \
