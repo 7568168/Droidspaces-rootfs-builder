@@ -73,6 +73,8 @@ RUN apt-get update && \
     fastfetch \
     # Wireless networking tools for hotspot functionality
     iw \
+    # Logging & Rotation
+    logrotate \
     # C/C++ Development
     build-essential \
     gcc \
@@ -212,6 +214,25 @@ RUN apt-get purge -y qemu-* binfmt-support && \
     # Install ONLY these packages (in this specific order)
     apt-get install -y qemu-user-static && \
     apt-get install -y binfmt-support
+
+# Apply Logging Hardening (journald 200MB limit and logrotate maxsize 50M)
+RUN <<EOF
+# Configure journald to limit logs to 200MB
+mkdir -p /etc/systemd/journald.conf.d
+cat <<EOT > /etc/systemd/journald.conf.d/ds-logging.conf
+[Journal]
+SystemMaxUse=200M
+RuntimeMaxUse=200M
+MaxRetentionSec=7day
+MaxLevelStore=info
+EOT
+
+# Configure logrotate to rotate based on size (50MB) to prevent disk fill
+sed -i 's/^#maxsize.*/maxsize 50M/' /etc/logrotate.conf
+if ! grep -q "maxsize 50M" /etc/logrotate.conf; then
+    echo "maxsize 50M" >> /etc/logrotate.conf
+fi
+EOF
 
 # Final cleanup of APT cache
 RUN apt-get clean && \

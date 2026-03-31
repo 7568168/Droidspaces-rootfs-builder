@@ -49,6 +49,8 @@ RUN apt-get update && \
     iproute2 \
     dnsutils \
     systemd-resolved \
+    # Logging & Rotation
+    logrotate \
     # Wireless networking tools
     iw \
     # Compression tools
@@ -241,6 +243,25 @@ EOF
 # Install QEMU and binfmt
 RUN apt-get update && \
     apt-get install -y --no-install-recommends qemu-user-static binfmt-support
+
+# Apply Logging Hardening (journald 200MB limit and logrotate maxsize 50M)
+RUN <<EOF
+# Configure journald to limit logs to 200MB
+mkdir -p /etc/systemd/journald.conf.d
+cat <<EOT > /etc/systemd/journald.conf.d/ds-logging.conf
+[Journal]
+SystemMaxUse=200M
+RuntimeMaxUse=200M
+MaxRetentionSec=7day
+MaxLevelStore=info
+EOT
+
+# Configure logrotate to rotate based on size (50MB) to prevent disk fill
+sed -i 's/^#maxsize.*/maxsize 50M/' /etc/logrotate.conf
+if ! grep -q "maxsize 50M" /etc/logrotate.conf; then
+    echo "maxsize 50M" >> /etc/logrotate.conf
+fi
+EOF
 
 # Final cleanup of APT cache
 RUN apt-get clean && \
