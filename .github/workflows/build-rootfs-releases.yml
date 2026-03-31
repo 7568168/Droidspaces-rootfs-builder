@@ -7,46 +7,83 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  setup:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    outputs:
+      templates: ${{ steps.find-templates.outputs.templates }}
+      build_id: ${{ steps.prep.outputs.build_id }}
+      build_date: ${{ steps.prep.outputs.build_date }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Generate Build ID
+      - name: Find Build Templates
+        id: find-templates
+        run: |
+          # Find all *.Dockerfile.builder files, extract names, and format as JSON array
+          TEMPLATES=$(ls *.Dockerfile.builder | sed 's/\.Dockerfile\.builder//' | jq -R -s -c 'split("\n")[:-1]')
+          echo "templates=$TEMPLATES" >> $GITHUB_OUTPUT
+          echo "Detected templates: $TEMPLATES"
+
+      - name: Prepare Build Metadata
+        id: prep
         run: |
           BUILD_DATE=$(date +'%Y-%m-%d %H:%M:%S')
           BUILD_ID="v$(date +'%Y%m%d-%H%M%S')"
-          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
-          echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
-          echo "Using Build ID: $BUILD_ID"
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "BUILD_ID=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "Build ID: $BUILD_ID"
 
-      - name: Build RootFS
+  build:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        template: ${{ fromJson(needs.setup.outputs.templates) }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Build RootFS (${{ matrix.template }})
         run: |
           chmod +x build_rootfs.sh
           # The script handles binfmt and buildx setup internally
-          VERSION="${{ env.BUILD_ID }}" ./build_rootfs.sh
+          ./build_rootfs.sh -i "${{ matrix.template }}.Dockerfile.builder" -v "${{ needs.setup.outputs.build_id }}"
 
-      - name: Create Release and Upload Assets
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.template }}-rootfs
+          path: "*.tar.gz"
+          retention-days: 1
+
+  release:
+    needs: [setup, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-rootfs"
+          merge-multiple: true
+
+      - name: Create Unified Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.BUILD_ID }}
-          name: "Droidspaces RootFS ${{ env.BUILD_ID }}"
+          tag_name: ${{ needs.setup.outputs.build_id }}
+          name: "Droidspaces RootFS ${{ needs.setup.outputs.build_id }}"
           files: "*.tar.gz"
           body: |
-            Automated Droidspaces RootFS Build
-            Built on: ${{ env.BUILD_DATE }}
-            Build ID: ${{ env.BUILD_ID }}
+            Automated Droidspaces RootFS Multi-Build
+            Built on: ${{ needs.setup.outputs.build_date }}
+            Build ID: ${{ needs.setup.outputs.build_id }}
+            
+            Included Templates:
+            ${{ join(fromJson(needs.setup.outputs.templates), ', ') }}
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Artifacts (Fallback)
-        uses: actions/upload-artifact@v4
-        with:
-          name: droidspaces-rootfs-${{ env.BUILD_ID }}
-          path: "*.tar.gz"
-          retention-days: 7
