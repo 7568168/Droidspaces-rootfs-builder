@@ -1,13 +1,17 @@
-# Dockerfile (GUI)
-# Stage 1: Build and customize the rootfs for development (GUI)
+# Dockerfile (Minimal)
+# Stage 1: Build and customize the rootfs for development (Minimal - Debian 13)
 ARG TARGETPLATFORM
-FROM --platform=${TARGETPLATFORM:-linux/arm64} debian:bookworm AS customizer
+FROM --platform=${TARGETPLATFORM:-linux/arm64} debian:trixie AS customizer
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Update base system and enable non-free/contrib for hfsprogs
+# Update base system and enable non-free/contrib
 RUN (sed -i 's/main/main contrib non-free/g' /etc/apt/sources.list 2>/dev/null || sed -i 's/Components: main/Components: main contrib non-free/g' /etc/apt/sources.list.d/debian.sources) && \
     apt-get update && apt-get upgrade -y
+
+# Install Custom Mesa (Turnip) before anything else
+COPY scripts/install_mesa.sh /tmp/install_mesa.sh
+RUN chmod +x /tmp/install_mesa.sh && /tmp/install_mesa.sh && rm /tmp/install_mesa.sh
 
 # Copy custom scripts first
 COPY scripts/download-firmware /usr/local/bin/
@@ -18,7 +22,7 @@ COPY scripts/bashrc.sh /etc/profile.d/ds-aliases.sh
 # Make scripts executable
 RUN chmod +x /usr/local/bin/download-firmware /etc/profile.d/ds-aliases.sh
 
-# Main installation layer for everything (Minimal + CLI + GUI)
+# Install Minimal package set
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     # Core utilities
@@ -36,11 +40,10 @@ RUN apt-get update && \
     bash-completion \
     udev \
     dbus \
-    # Basic tools
+    # Basic tools requested by user
     git \
     nano \
     sudo \
-    procps \
     # Networking & SSH
     openssh-server \
     net-tools \
@@ -48,116 +51,17 @@ RUN apt-get update && \
     iputils-ping \
     iproute2 \
     dnsutils \
+    # Systemd-resolved is separate in Debian
     systemd-resolved \
     # Logging & Rotation
     logrotate \
-    # Wireless networking tools
-    iw \
-    # Compression tools
-    zip \
-    unzip \
-    p7zip-full \
-    bzip2 \
-    xz-utils \
-    tar \
-    gzip \
-    # Development tools
-    build-essential \
-    gcc \
-    g++ \
-    gdb \
-    make \
-    cmake \
-    autoconf \
-    automake \
-    libtool \
-    pkg-config \
-    # Python Development
-    python3 \
-    python3-pip \
-    python3-dev \
-    python3-venv \
-    # File system tools
-    dosfstools \
-    exfatprogs \
-    btrfs-progs \
-    ntfs-3g \
-    xfsprogs \
-    jfsutils \
-    hfsprogs \
-    reiserfsprogs \
-    cryptsetup \
-    nilfs-tools \
-    udftools \
-    f2fs-tools \
-    # XFCE Desktop Environment and essential tools
-    xfce4 \
-    desktop-base \
-    xfce4-terminal \
-    xfce4-session \
-    xfce4-goodies \
-    xfce4-taskmanager \
-    mousepad \
-    galculator \
-    nemo-fileroller \
-    ristretto \
-    xfce4-screenshooter \
-    catfish \
-    xcursor-themes \
-    xfce4-clipman-plugin \
-    xinit \
-    xorg \
-    dbus-x11 \
-    at-spi2-core \
-    tumbler \
-    # Icon themes
-    adwaita-icon-theme-full \
-    hicolor-icon-theme \
-    gnome-icon-theme \
-    tango-icon-theme \
-    # GTK theme engines and popular themes
-    gtk2-engines-murrine \
-    gtk2-engines-pixbuf \
-    arc-theme \
-    numix-gtk-theme \
-    materia-gtk-theme \
-    papirus-icon-theme \
-    greybird-gtk-theme \
-    # Essential fonts for GUI rendering
-    fonts-dejavu-core \
-    fonts-liberation \
-    fonts-liberation2 \
-    fonts-noto-core \
-    fonts-noto-ui-core \
-    # File manager and GUI utilities
-    thunar \
-    thunar-volman \
-    thunar-archive-plugin \
-    thunar-media-tags-plugin \
-    gvfs \
-    gvfs-backends \
-    gvfs-fuse \
-    x11-xserver-utils \
-    x11-utils \
-    xclip \
-    xsel \
-    xfwm4 \
-    xfconf \
-    zenity \
-    notification-daemon \
-    # Browser (Firefox ESR)
-    firefox-esr \
-    # User directory management
-    xdg-user-dirs \
-    # PolicyKit for permissions
-    policykit-1 \
+    # Procps for system monitoring
+    procps \
     && apt-get autoremove -y
 
-# Install Docker and set iptables-legacy
+# Configure iptables-legacy (MANDATORY for Android compatibility)
 RUN update-alternatives --set iptables /usr/sbin/iptables-legacy && \
-    update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy && \
-    curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh && \
-    rm get-docker.sh
+    update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
 # Configure locales, environment, SSH, and user setup
 RUN locale-gen en_US.UTF-8 && \
@@ -168,9 +72,7 @@ RUN locale-gen en_US.UTF-8 && \
     mkdir -p /var/run/sshd && \
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config && \
     sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
-    # Initialize default user directories for GUI apps
-    xdg-user-dirs-update && \
-    # Remove default user if it exists
+    # Remove default user if it exists (Debian sometimes has 'debian' or similar in cloud images, but base is empty)
     deluser --remove-home debian || true
 
 # Fix DHCP in the container
@@ -240,7 +142,7 @@ rm -f /etc/systemd/system/systemd-udevd.service
 ln -sf /etc/systemd/system/safe-udev-trigger.service /etc/systemd/system/multi-user.target.wants/safe-udev-trigger.service
 EOF
 
-# Install QEMU and binfmt
+# Install QEMU and binfmt (Essential for multi-arch/emulation support if needed)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends qemu-user-static binfmt-support
 

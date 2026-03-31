@@ -1,7 +1,7 @@
-# Dockerfile (CLI)
-# Stage 1: Build and customize the rootfs for development (CLI)
+# Dockerfile (GUI)
+# Stage 1: Build and customize the rootfs for development (GUI - Debian 13)
 ARG TARGETPLATFORM
-FROM --platform=${TARGETPLATFORM:-linux/arm64} debian:bookworm AS customizer
+FROM --platform=${TARGETPLATFORM:-linux/arm64} debian:trixie AS customizer
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -18,7 +18,7 @@ COPY scripts/bashrc.sh /etc/profile.d/ds-aliases.sh
 # Make scripts executable
 RUN chmod +x /usr/local/bin/download-firmware /etc/profile.d/ds-aliases.sh
 
-# This is the main installation layer for CLI/Dev tools
+# Main installation layer for everything (Minimal + CLI + GUI)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     # Core utilities
@@ -53,9 +53,6 @@ RUN apt-get update && \
     logrotate \
     # Wireless networking tools
     iw \
-    # System monitoring & Editors
-    htop \
-    vim \
     # Compression tools
     zip \
     unzip \
@@ -64,7 +61,7 @@ RUN apt-get update && \
     xz-utils \
     tar \
     gzip \
-    # C/C++ Development
+    # Development tools
     build-essential \
     gcc \
     g++ \
@@ -93,6 +90,67 @@ RUN apt-get update && \
     nilfs-tools \
     udftools \
     f2fs-tools \
+    # XFCE Desktop Environment and essential tools
+    xfce4 \
+    desktop-base \
+    xfce4-terminal \
+    xfce4-session \
+    xfce4-goodies \
+    xfce4-taskmanager \
+    mousepad \
+    galculator \
+    nemo-fileroller \
+    ristretto \
+    xfce4-screenshooter \
+    catfish \
+    xcursor-themes \
+    xfce4-clipman-plugin \
+    xinit \
+    xorg \
+    dbus-x11 \
+    at-spi2-core \
+    tumbler \
+    # Icon themes
+    adwaita-icon-theme-full \
+    hicolor-icon-theme \
+    gnome-icon-theme \
+    tango-icon-theme \
+    # GTK theme engines and popular themes
+    gtk2-engines-murrine \
+    gtk2-engines-pixbuf \
+    arc-theme \
+    numix-gtk-theme \
+    materia-gtk-theme \
+    papirus-icon-theme \
+    greybird-gtk-theme \
+    # Essential fonts for GUI rendering
+    fonts-dejavu-core \
+    fonts-liberation \
+    fonts-liberation2 \
+    fonts-noto-core \
+    fonts-noto-ui-core \
+    # File manager and GUI utilities
+    thunar \
+    thunar-volman \
+    thunar-archive-plugin \
+    thunar-media-tags-plugin \
+    gvfs \
+    gvfs-backends \
+    gvfs-fuse \
+    x11-xserver-utils \
+    x11-utils \
+    xclip \
+    xsel \
+    xfwm4 \
+    xfconf \
+    zenity \
+    notification-daemon \
+    # Browser (Firefox ESR)
+    firefox-esr \
+    # User directory management
+    xdg-user-dirs \
+    # PolicyKit for permissions
+    policykit-1 \
     && apt-get autoremove -y
 
 # Install Docker and set iptables-legacy
@@ -110,6 +168,8 @@ RUN locale-gen en_US.UTF-8 && \
     mkdir -p /var/run/sshd && \
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config && \
     sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    # Initialize default user directories for GUI apps
+    xdg-user-dirs-update && \
     # Remove default user if it exists
     deluser --remove-home debian || true
 

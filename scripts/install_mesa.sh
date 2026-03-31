@@ -73,7 +73,7 @@ fi
 
 echo "Installing required build tools..."
 # We install these explicitly so they are caught in the 'After' snapshot
-apt-get install -y glslang-tools libxfixes-dev unzip curl wget build-essential meson ninja-build
+apt-get install -y glslang-tools libxfixes-dev unzip curl wget build-essential meson ninja-build patch git
 apt-get build-dep mesa -y
 
 # Get Mesa
