@@ -73,8 +73,6 @@ RUN apt-get update && \
     fastfetch \
     # Wireless networking tools for hotspot functionality
     iw \
-    hostapd \
-    isc-dhcp-server \
     # C/C++ Development
     build-essential \
     gcc \

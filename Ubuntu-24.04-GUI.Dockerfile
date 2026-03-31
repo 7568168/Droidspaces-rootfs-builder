@@ -76,9 +76,6 @@ RUN apt-get update && \
     psmisc \
     # Wireless networking tools for hotspot functionality
     iw \
-    hostapd \
-    isc-dhcp-server \
-    kea-dhcp4-server \
     # C/C++ Development
     build-essential \
     gcc \

@@ -51,8 +51,6 @@ RUN apt-get update && \
     systemd-resolved \
     # Wireless networking tools
     iw \
-    hostapd \
-    isc-dhcp-server \
     # System monitoring & Editors
     htop \
     vim \
