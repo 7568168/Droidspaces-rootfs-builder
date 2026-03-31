@@ -50,7 +50,13 @@ cleanup() {
     # Revert sources
     if [ -f /etc/apt/sources.list.bak ]; then
         mv /etc/apt/sources.list.bak /etc/apt/sources.list
-    else
+    fi
+    if [ -f /etc/apt/sources.list.d/debian.sources.bak ]; then
+        mv /etc/apt/sources.list.d/debian.sources.bak /etc/apt/sources.list.d/debian.sources
+    fi
+
+    # Clean up any manual tagging in sources.list if it exists
+    if [ -f /etc/apt/sources.list ]; then
         sed -i '/#MESA_TEMP_SRC/d' /etc/apt/sources.list
     fi
 
@@ -64,10 +70,25 @@ cleanup() {
 dpkg --get-selections | awk '$2=="install"{print $1}' | sort > "$BEFORE_PKGS"
 
 echo "Configuring sources..."
-cp /etc/apt/sources.list /etc/apt/sources.list.bak
-if ! grep -q "^deb-src " /etc/apt/sources.list; then
-    # Add deb-src based on existing deb lines and tag them
-    grep "^deb " /etc/apt/sources.list | sed 's/^deb /deb-src /; s/$/ #MESA_TEMP_SRC/' >> /etc/apt/sources.list
+# Handle traditional sources.list
+if [ -f /etc/apt/sources.list ]; then
+    cp /etc/apt/sources.list /etc/apt/sources.list.bak
+    if ! grep -q "^deb-src " /etc/apt/sources.list; then
+        grep "^deb " /etc/apt/sources.list | sed 's/^deb /deb-src /; s/$/ #MESA_TEMP_SRC/' >> /etc/apt/sources.list
+        NEED_UPDATE=1
+    fi
+fi
+
+# Handle DEB822 debian.sources (Debian 13+)
+if [ -f /etc/apt/sources.list.d/debian.sources ]; then
+    cp /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/debian.sources.bak
+    if ! grep -q "deb-src" /etc/apt/sources.list.d/debian.sources; then
+        sed -i '/Types: deb/s/$/ deb-src/' /etc/apt/sources.list.d/debian.sources
+        NEED_UPDATE=1
+    fi
+fi
+
+if [ "$NEED_UPDATE" = "1" ]; then
     apt-get update -qq
 fi
 

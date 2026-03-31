@@ -120,7 +120,6 @@ RUN apt-get update && \
     gtk2-engines-pixbuf \
     arc-theme \
     numix-gtk-theme \
-    materia-gtk-theme \
     papirus-icon-theme \
     greybird-gtk-theme \
     # Essential fonts for GUI rendering
@@ -150,7 +149,8 @@ RUN apt-get update && \
     # User directory management
     xdg-user-dirs \
     # PolicyKit for permissions
-    policykit-1 \
+    polkitd \
+    mate-polkit \
     && apt-get autoremove -y
 
 # Install Docker and set iptables-legacy
